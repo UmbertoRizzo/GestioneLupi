@@ -1,0 +1,33 @@
+import Link from "next/link";
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ClipboardPlus, FileDown, FileWarning, FolderCog, Mail, UserCheck, UserPlus, UsersRound } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { StatusPill } from "@/components/dashboard/status-pill";
+import { requireAdminBranch } from "@/lib/branch";
+import { prisma } from "@/lib/db";
+import { formatDate, timeAgo } from "@/lib/utils";
+
+export const metadata = { title: "Dashboard branca" };
+
+export default async function AdminDashboardPage() {
+  const { branch } = await requireAdminBranch();
+  const now = new Date();
+  const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const [childrenCount, pendingChildren, missingCount, dueSoon, requests, logs] = await Promise.all([
+    prisma.child.count({ where: { branchId: branch.id, approvalStatus: "APPROVED" } }),
+    prisma.child.count({ where: { branchId: branch.id, approvalStatus: "PENDING" } }),
+    prisma.requestAssignment.count({ where: { request: { branchId: branch.id, status: "PUBLISHED" }, status: { in: ["MISSING", "NEEDS_CHANGES"] } } }),
+    prisma.documentRequest.count({ where: { branchId: branch.id, status: "PUBLISHED", dueDate: { gte: now, lte: nextMonth } } }),
+    prisma.documentRequest.findMany({ where: { branchId: branch.id, status: "PUBLISHED" }, include: { _count: { select: { assignments: true } }, assignments: { select: { status: true } } }, orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }], take: 5 }),
+    prisma.auditLog.findMany({ where: { branchId: branch.id }, orderBy: { createdAt: "desc" }, take: 6 }),
+  ]);
+  const driveConnected = branch.googleConnection?.driveEnabled && branch.googleConnection.status === "CONNECTED";
+  return <div className="page-container">
+    <PageHeader eyebrow={`${branch.group.name} / ${branch.name}`} title={`Buongiorno, ${branch.name}`} description="Le cose che richiedono attenzione, tutte qui." actions={<><Link className="button button--secondary" href="/admin/esportazioni"><FileDown size={18} /> Esporta</Link><Link className="button button--primary" href="/admin/richieste/nuova"><ClipboardPlus size={18} /> Nuova richiesta</Link></>} />
+    {!driveConnected && <div className="notice notice--warning"><AlertTriangle size={20} /><div><strong>Google Drive non e ancora collegato</strong><p>Puoi creare richieste, ma i genitori non potranno caricare documenti. <Link className="text-link" href="/admin/impostazioni">Completa il collegamento</Link>.</p></div></div>}
+    <div className="stats-grid"><StatCard label="Ragazzi attivi" value={childrenCount} hint={`in ${branch.name}`} icon={UsersRound} /><StatCard label="Da approvare" value={pendingChildren} hint="nuove iscrizioni" icon={UserCheck} tone={pendingChildren ? "warning" : "success"} /><StatCard label="Consegne da sistemare" value={missingCount} hint="mancanti o da correggere" icon={FileWarning} tone={missingCount ? "danger" : "success"} /><StatCard label="Scadenze vicine" value={dueSoon} hint="nei prossimi 30 giorni" icon={CalendarClock} tone={dueSoon ? "warning" : undefined} /></div>
+    <div className="dashboard-grid"><div className="dashboard-stack"><section className="panel"><header className="panel__header"><div><h2>Richieste aperte</h2><p>Avanzamento delle raccolte pubblicate</p></div><Link className="text-link" href="/admin/richieste">Vedi tutte</Link></header><div className="panel__body--flush">{requests.length ? requests.map((request) => { const completed = request.assignments.filter((a) => ["APPROVED", "COMPLETED"].includes(a.status)).length; const percentage = request._count.assignments ? Math.round((completed / request._count.assignments) * 100) : 0; return <Link className="request-card" key={request.id} href={`/admin/richieste/${request.id}`}><div><div className="request-card__head"><h3>{request.title}</h3><StatusPill status={request.status} /></div><p>{request.dueDate ? `Scade il ${formatDate(request.dueDate)}` : "Nessuna scadenza"}</p><div className="request-card__meta"><span><CheckCircle2 size={14} /> {completed} completate</span><span><FileWarning size={14} /> {request._count.assignments - completed} da completare</span></div></div><div className="request-card__progress"><strong>{percentage}%</strong><div className="progress"><span style={{ width: `${percentage}%` }} /></div></div></Link>; }) : <div className="empty-state"><ClipboardPlus size={28} /><h3>Nessuna richiesta aperta</h3><p>Crea la prima raccolta per la branca.</p></div>}</div></section><section className="panel"><header className="panel__header"><div><h2>Attivita recente</h2><p>Le ultime operazioni nella branca</p></div><Link className="text-link" href="/admin/log">Cronologia</Link></header><div className="list">{logs.map((log) => <div className="list-item" key={log.id}><span className="list-item__icon"><CheckCircle2 size={18} /></span><span className="list-item__text"><strong>{log.summary}</strong><small>{log.entityType}</small></span><span className="list-item__meta">{timeAgo(log.createdAt)}</span></div>)}</div></section></div>
+      <aside className="dashboard-stack"><section className="panel"><header className="panel__header"><h2>Azioni rapide</h2></header><div className="panel__body quick-actions"><Link className="quick-action" href="/admin/richieste/nuova"><ClipboardPlus size={21} />Nuova richiesta</Link><Link className="quick-action" href="/admin/ragazzi?stato=PENDING"><UserPlus size={21} />Approva iscritti</Link><Link className="quick-action" href="/admin/esportazioni"><FileDown size={21} />Esporta Excel</Link><Link className="quick-action" href="/admin/richieste"><Mail size={21} />Invia promemoria</Link></div></section><section className="panel"><header className="panel__header"><h2>Collegamenti</h2></header><div className="panel__body"><div className="metric-line"><div className="metric-line__label"><FolderCog size={19} /><div><strong>Google Drive</strong><span>{branch.googleConnection?.driveRootFolderName || "Cartella documenti"}</span></div></div><StatusPill status={driveConnected ? "CONNECTED" : "DISCONNECTED"} /></div><div className="metric-line"><div className="metric-line__label"><Mail size={19} /><div><strong>Email di branca</strong><span>{branch.email}</span></div></div><StatusPill status={branch.googleConnection?.gmailEnabled ? "CONNECTED" : "DISCONNECTED"} /></div></div></section><Link className="button button--secondary" href="/admin/impostazioni"><FolderCog size={18} /> Gestisci collegamenti <ArrowRight size={16} /></Link></aside>
+    </div>
+  </div>;
+}

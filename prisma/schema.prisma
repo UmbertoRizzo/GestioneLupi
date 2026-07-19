@@ -1,0 +1,531 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  BRANCH_ADMIN
+  PARENT
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum BranchStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  MERGED
+}
+
+enum BranchKind {
+  LUPI
+  REPARTO
+  NOVIZIATO
+  CLAN
+  COMUNITA_CAPI
+  ALTRO
+}
+
+enum FamilyKind {
+  SINGLE_PARENT
+  HOUSEHOLD
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RequestStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum RequestMode {
+  SIMPLE
+  COMPLETE
+}
+
+enum RequestTargetType {
+  ALL
+  YEARS
+  CHILDREN
+}
+
+enum RequestItemType {
+  FILE
+  TEXT
+  BOOLEAN
+}
+
+enum AssignmentStatus {
+  MISSING
+  UPLOADED
+  NEEDS_CHANGES
+  APPROVED
+  COMPLETED
+}
+
+enum SubmissionStatus {
+  MISSING
+  PENDING
+  NEEDS_CHANGES
+  APPROVED
+}
+
+enum ActivityStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum ConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id               String        @id @default(cuid())
+  email            String        @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone             String?
+  role              UserRole
+  status            AccountStatus @default(PENDING)
+  privacyAcceptedAt DateTime?
+  lastLoginAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  sessions          Session[]
+  branchAdmins      BranchAdmin[]
+  familyMemberships FamilyMember[]
+  children          ChildParent[]
+  createdChildren   Child[]       @relation("ChildCreator")
+  createdRequests   DocumentRequest[] @relation("RequestCreator")
+  submissions       Submission[]  @relation("SubmissionUploader")
+  auditLogs         AuditLog[]     @relation("AuditActor")
+  emailLogs         EmailLog[]     @relation("EmailActor")
+  consentLogs       ConsentLog[]
+  oauthStates       OAuthState[]
+  passwordResets    PasswordResetToken[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  userAgent String?
+  ipHash    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ScoutGroup {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  city      String?
+  zone      String?
+  region    String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches Branch[]
+}
+
+model Branch {
+  id                 String       @id @default(cuid())
+  groupId            String
+  name               String
+  slug               String       @unique
+  kind               BranchKind
+  email              String
+  status             BranchStatus @default(PENDING)
+  primaryColor       String       @default("#c62828")
+  secondaryColor     String       @default("#174a7e")
+  accentColor        String       @default("#f2b134")
+  logoUrl            String?
+  maxUploadBytes     Int          @default(10485760)
+  mergedIntoId       String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  group              ScoutGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  mergedInto         Branch?      @relation("BranchMerge", fields: [mergedIntoId], references: [id])
+  mergedBranches     Branch[]     @relation("BranchMerge")
+  admins             BranchAdmin[]
+  children           Child[]
+  activities         Activity[]
+  requests           DocumentRequest[]
+  templates          Template[]
+  googleConnection   GoogleConnection?
+  auditLogs          AuditLog[]
+  emailLogs          EmailLog[]
+  oauthStates        OAuthState[]
+
+  @@unique([groupId, name])
+  @@index([groupId, status])
+}
+
+model BranchAdmin {
+  id                 String  @id @default(cuid())
+  userId             String
+  branchId           String
+  isGroupLeaderLabel Boolean @default(false)
+  createdAt          DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId])
+  @@index([branchId])
+}
+
+model Family {
+  id          String     @id @default(cuid())
+  displayName String
+  kind        FamilyKind
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  members FamilyMember[]
+}
+
+model FamilyMember {
+  id        String   @id @default(cuid())
+  familyId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@index([userId])
+}
+
+model Child {
+  id               String         @id @default(cuid())
+  firstName        String
+  lastName         String
+  personCode       String         @unique
+  birthDate        DateTime
+  gender           String
+  schoolYear       Int
+  notes            String?
+  approvalStatus   ApprovalStatus @default(PENDING)
+  rejectionReason  String?
+  branchId         String
+  createdById      String
+  driveFolderId    String?
+  driveFolderName  String?
+  approvedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  branch      Branch              @relation(fields: [branchId], references: [id])
+  createdBy   User                @relation("ChildCreator", fields: [createdById], references: [id])
+  parents     ChildParent[]
+  assignments RequestAssignment[]
+  targets     RequestTargetChild[]
+
+  @@index([branchId, schoolYear])
+  @@index([branchId, approvalStatus])
+}
+
+model ChildParent {
+  id                   String  @id @default(cuid())
+  childId              String
+  userId               String
+  relationship         String  @default("Genitore")
+  isPrimary             Boolean @default(false)
+  emailNotifications    Boolean @default(true)
+  approvalStatus        ApprovalStatus @default(PENDING)
+  createdAt             DateTime @default(now())
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, userId])
+  @@index([userId])
+}
+
+model Activity {
+  id          String         @id @default(cuid())
+  branchId    String
+  title       String
+  description String?
+  year        Int?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  status      ActivityStatus @default(DRAFT)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  branch   Branch            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  requests DocumentRequest[]
+
+  @@index([branchId, status])
+}
+
+model DocumentRequest {
+  id               String            @id @default(cuid())
+  branchId         String
+  activityId       String?
+  createdById      String
+  title            String
+  description      String?
+  dueDate          DateTime?
+  status           RequestStatus     @default(DRAFT)
+  mode             RequestMode       @default(COMPLETE)
+  targetType       RequestTargetType @default(ALL)
+  targetYears      Int[]
+  visibleToParents Boolean           @default(true)
+  requiresApproval Boolean           @default(true)
+  emailOnPublish   Boolean           @default(false)
+  reminderEnabled  Boolean           @default(true)
+  publishedAt      DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  branch      Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  activity    Activity?            @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  createdBy   User                 @relation("RequestCreator", fields: [createdById], references: [id])
+  items       RequestItem[]
+  targetChildren RequestTargetChild[]
+  assignments RequestAssignment[]
+
+  @@index([branchId, status])
+  @@index([activityId])
+  @@index([dueDate])
+}
+
+model RequestTargetChild {
+  id        String @id @default(cuid())
+  requestId String
+  childId   String
+
+  request DocumentRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  child   Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, childId])
+}
+
+model RequestItem {
+  id               String          @id @default(cuid())
+  requestId        String
+  position         Int             @default(0)
+  title            String
+  description      String?
+  type             RequestItemType
+  required         Boolean         @default(true)
+  driveFileName    String?
+  allowedMimeTypes String[]
+  maxFileSize      Int?
+  templateId       String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  request     DocumentRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  template    Template?       @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  submissions Submission[]
+
+  @@index([requestId, position])
+}
+
+model RequestAssignment {
+  id          String           @id @default(cuid())
+  requestId   String
+  childId     String
+  status      AssignmentStatus @default(MISSING)
+  adminNotes  String?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  request     DocumentRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  child       Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@unique([requestId, childId])
+  @@index([childId, status])
+  @@index([requestId, status])
+}
+
+model Submission {
+  id                    String           @id @default(cuid())
+  assignmentId          String
+  requestItemId         String
+  uploadedById          String?
+  status                SubmissionStatus @default(MISSING)
+  textValue             String?
+  booleanValue          Boolean?
+  currentDriveFileId    String?
+  currentDriveFileName  String?
+  currentMimeType       String?
+  currentSizeBytes      Int?
+  pendingDriveFileId    String?
+  pendingDriveFileName  String?
+  pendingMimeType       String?
+  pendingSizeBytes      Int?
+  version               Int              @default(0)
+  rejectionReason       String?
+  submittedAt           DateTime?
+  approvedAt            DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  assignment  RequestAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  requestItem RequestItem       @relation(fields: [requestItemId], references: [id], onDelete: Cascade)
+  uploadedBy  User?             @relation("SubmissionUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@unique([assignmentId, requestItemId])
+  @@index([status])
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  branchId    String
+  title       String
+  description String?
+  driveFileId String
+  fileName    String
+  mimeType    String?
+  sizeBytes   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  requestItems RequestItem[]
+
+  @@index([branchId])
+}
+
+model GoogleConnection {
+  id                    String           @id @default(cuid())
+  branchId              String           @unique
+  status                ConnectionStatus @default(DISCONNECTED)
+  googleEmail           String?
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  tokenExpiry            DateTime?
+  scopes                 String[]
+  driveEnabled           Boolean          @default(false)
+  gmailEnabled           Boolean          @default(false)
+  driveRootFolderId      String?
+  driveRootFolderName    String?
+  lastCheckedAt          DateTime?
+  lastError              String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+}
+
+model OAuthState {
+  id        String   @id @default(cuid())
+  nonceHash String   @unique
+  userId    String
+  branchId  String
+  purpose   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  branchId  String?
+  action    String
+  entityType String
+  entityId  String?
+  summary   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  actor  User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([branchId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+}
+
+model EmailLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  branchId   String?
+  recipients String[]
+  subject    String
+  body       String
+  status     EmailStatus @default(QUEUED)
+  provider   String?
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime    @default(now())
+
+  actor  User?   @relation("EmailActor", fields: [actorId], references: [id], onDelete: SetNull)
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([branchId, createdAt])
+  @@index([status, createdAt])
+}
+
+model ConsentLog {
+  id         String   @id @default(cuid())
+  userId     String
+  policyVersion String
+  consentType String
+  accepted   Boolean
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
