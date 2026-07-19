@@ -17,8 +17,6 @@ export const parentRegistrationSchema = z.object({
 }).refine((data) => data.password === data.confirmPassword, { message: "Le password non coincidono", path: ["confirmPassword"] });
 
 export const branchRegistrationSchema = z.object({
-  firstName: z.string().trim().min(2, "Inserisci il nome del referente").max(80),
-  lastName: z.string().trim().min(2, "Inserisci il cognome del referente").max(80),
   groupName: z.string().trim().min(2, "Inserisci il gruppo").max(100),
   branchName: z.string().trim().min(2, "Inserisci il nome della branca").max(100),
   branchKind: z.enum(["LUPI", "REPARTO", "NOVIZIATO", "CLAN", "COMUNITA_CAPI", "ALTRO"]),

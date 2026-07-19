@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { ApprovalStatus } from "@/generated/prisma/client";
 import { requireBranchManager, requireRole } from "@/lib/auth";
+import { requireAdminBranch } from "@/lib/branch";
 import { writeAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { normalizePersonCode } from "@/lib/utils";
@@ -45,6 +46,17 @@ export async function createChildAction(formData: FormData) {
   });
   await writeAudit({ actorId: user.id, branchId: child.branchId, action: "CHILD_REGISTRATION_REQUESTED", entityType: "Child", entityId: child.id, summary: `Richiesta iscrizione di ${child.firstName} ${child.lastName}` });
   redirect("/famiglia/figli?aggiunto=1");
+}
+
+export async function createChildByAdminAction(formData: FormData) {
+  const { user, branch } = await requireAdminBranch();
+  const parsed = childSchema.omit({ branchId: true }).extend({ notes: z.string().max(4000).optional() }).safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) redirect("/admin/ragazzi/nuovo?errore=dati");
+  const personCode = normalizePersonCode(parsed.data.personCode);
+  if (await prisma.child.findUnique({ where: { personCode }, select: { id: true } })) redirect("/admin/ragazzi/nuovo?errore=codice");
+  const child = await prisma.child.create({ data: { ...parsed.data, notes: parsed.data.notes || null, personCode, branchId: branch.id, createdById: user.id, approvalStatus: ApprovalStatus.APPROVED, approvedAt: new Date() } });
+  await writeAudit({ actorId: user.id, branchId: branch.id, action: "CHILD_CREATED_BY_ADMIN", entityType: "Child", entityId: child.id, summary: `${child.firstName} ${child.lastName} aggiunto direttamente alla branca` });
+  redirect(`/admin/ragazzi/${child.id}?creato=1`);
 }
 
 export async function approveChildAction(childId: string) {

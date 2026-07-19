@@ -68,7 +68,7 @@ export async function registerBranchAction(_: ActionState, formData: FormData): 
   const passwordHash = await bcrypt.hash(parsed.data.password, 12);
   const result = await prisma.$transaction(async (tx) => {
     const group = await tx.scoutGroup.upsert({ where: { name: parsed.data.groupName }, update: {}, create: { name: parsed.data.groupName } });
-    const user = await tx.user.create({ data: { email, passwordHash, firstName: parsed.data.firstName, lastName: parsed.data.lastName, role: UserRole.BRANCH_ADMIN, status: AccountStatus.PENDING, privacyAcceptedAt: new Date() } });
+    const user = await tx.user.create({ data: { email, passwordHash, firstName: "Branca", lastName: parsed.data.branchName, role: UserRole.BRANCH_ADMIN, status: AccountStatus.PENDING, privacyAcceptedAt: new Date() } });
     const branch = await tx.branch.create({ data: {
       groupId: group.id, name: parsed.data.branchName, slug, kind: parsed.data.branchKind, email, status: BranchStatus.PENDING,
       admins: { create: { userId: user.id } },

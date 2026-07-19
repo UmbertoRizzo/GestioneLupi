@@ -11,6 +11,20 @@ import { verifyDriveFolder } from "@/lib/google";
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
+export async function updateBranchDetailsAction(formData: FormData) {
+  const { user, branch } = await requireAdminBranch();
+  const parsed = z.object({
+    name: z.string().trim().min(2).max(100),
+    kind: z.enum(["LUPI", "REPARTO", "NOVIZIATO", "CLAN", "COMUNITA_CAPI", "ALTRO"]),
+  }).safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) redirect("/admin/impostazioni?errore=branca");
+  const duplicate = await prisma.branch.findFirst({ where: { groupId: branch.groupId, name: parsed.data.name, id: { not: branch.id } }, select: { id: true } });
+  if (duplicate) redirect("/admin/impostazioni?errore=nome-duplicato");
+  const updated = await prisma.branch.update({ where: { id: branch.id }, data: parsed.data });
+  await writeAudit({ actorId: user.id, branchId: branch.id, action: "BRANCH_DETAILS_UPDATED", entityType: "Branch", entityId: branch.id, summary: `Branca rinominata da ${branch.name} a ${updated.name}` });
+  redirect("/admin/impostazioni?salvato=1");
+}
+
 export async function updateBranchThemeAction(formData: FormData) {
   const { user, branch } = await requireAdminBranch();
   const parsed = z.object({ primaryColor: hexColor, secondaryColor: hexColor, accentColor: hexColor, logoUrl: z.string().url().or(z.literal("")).optional(), maxUploadMb: z.coerce.number().int().min(1).max(250) }).safeParse(Object.fromEntries(formData.entries()));
