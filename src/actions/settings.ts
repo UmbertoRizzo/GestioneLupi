@@ -69,6 +69,7 @@ export async function migrateDriveDocumentsAction(formData: FormData) {
   const itemIds = formData.getAll("requestItemId").map(String).filter(Boolean);
   if (!itemIds.length) redirect("/admin/impostazioni?migrazione=seleziona");
   const deleteOld = formData.get("deleteOld") === "on";
+  await prisma.child.updateMany({ where: { branchId: branch.id }, data: { driveFolderId: null, driveFolderName: null } });
   const submissions = await prisma.submission.findMany({
     where: {
       requestItemId: { in: itemIds },

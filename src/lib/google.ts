@@ -73,12 +73,23 @@ async function findOrCreateFolder(branchId: string, parentId: string, name: stri
   return created.data.id;
 }
 
+async function folderIsInsideParent(branchId: string, folderId: string, parentId: string) {
+  try {
+    const { client } = await getAuthorizedGoogleClient(branchId);
+    const drive = google.drive({ version: "v3", auth: client });
+    const response = await drive.files.get({ fileId: folderId, fields: "id,mimeType,parents,trashed", supportsAllDrives: true });
+    return response.data.mimeType === "application/vnd.google-apps.folder" && !response.data.trashed && response.data.parents?.includes(parentId);
+  } catch {
+    return false;
+  }
+}
+
 export async function ensureChildDriveFolder(childId: string) {
   const child = await prisma.child.findUnique({ where: { id: childId }, include: { branch: { include: { googleConnection: true } } } });
   if (!child) throw new Error("Ragazzo non trovato");
-  if (child.driveFolderId) return { branchId: child.branchId, folderId: child.driveFolderId };
   const rootId = child.branch.googleConnection?.driveRootFolderId;
   if (!rootId) throw new Error("Scegli prima la cartella principale Google Drive nelle impostazioni della branca");
+  if (child.driveFolderId && await folderIsInsideParent(child.branchId, child.driveFolderId, rootId)) return { branchId: child.branchId, folderId: child.driveFolderId };
   const folderName = safeDriveName(`${child.firstName} ${child.lastName}`);
   const folderId = await findOrCreateFolder(child.branchId, rootId, folderName);
   await prisma.child.update({ where: { id: child.id }, data: { driveFolderId: folderId, driveFolderName: folderName } });
