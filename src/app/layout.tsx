@@ -9,7 +9,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="it">
       <body>
         {children}
-        <Script src="https://umbertorizzo.github.io/Jeff/widget.js?v=20260716-3" strategy="afterInteractive" />
+        <Script src="https://umbertorizzo.github.io/Jeff/widget.js?v=20260720-1" strategy="afterInteractive" />
       </body>
     </html>
   );
