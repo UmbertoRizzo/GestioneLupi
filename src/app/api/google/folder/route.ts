@@ -9,7 +9,10 @@ export async function POST(request: NextRequest) {
   const user = await requireBranchManager(body.branchId);
   try {
     const folder = await verifyDriveFolder(body.branchId, body.folderId);
-    await prisma.googleConnection.update({ where: { branchId: body.branchId }, data: { driveRootFolderId: folder.id, driveRootFolderName: folder.name, driveEnabled: true, status: "CONNECTED", lastCheckedAt: new Date(), lastError: null } });
+    await prisma.$transaction([
+      prisma.googleConnection.update({ where: { branchId: body.branchId }, data: { driveRootFolderId: folder.id, driveRootFolderName: folder.name, driveEnabled: true, status: "CONNECTED", lastCheckedAt: new Date(), lastError: null } }),
+      prisma.child.updateMany({ where: { branchId: body.branchId }, data: { driveFolderId: null, driveFolderName: null } }),
+    ]);
     await prisma.auditLog.create({ data: { actorId: user.id, branchId: body.branchId, action: "DRIVE_FOLDER_CHANGED", entityType: "GoogleConnection", summary: `Cartella Drive impostata su ${folder.name}`, metadata: { folderId: folder.id } } });
     return NextResponse.json(folder);
   } catch (error) {

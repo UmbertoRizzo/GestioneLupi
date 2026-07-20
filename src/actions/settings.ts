@@ -7,7 +7,7 @@ import { requireBranchManager, requireRole } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit";
 import { requireAdminBranch } from "@/lib/branch";
 import { prisma } from "@/lib/db";
-import { verifyDriveFolder } from "@/lib/google";
+import { copyDriveFileToChild, deleteDriveFile, verifyDriveFolder } from "@/lib/google";
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -51,13 +51,65 @@ export async function updateDriveFolderAction(formData: FormData) {
   if (!folderId) redirect("/admin/impostazioni?google=cartella-non-valida");
   try {
     const folder = await verifyDriveFolder(branch.id, folderId);
-    await prisma.googleConnection.update({ where: { branchId: branch.id }, data: { driveRootFolderId: folder.id, driveRootFolderName: folder.name, driveEnabled: true, status: "CONNECTED", lastCheckedAt: new Date(), lastError: null } });
+    await prisma.$transaction([
+      prisma.googleConnection.update({ where: { branchId: branch.id }, data: { driveRootFolderId: folder.id, driveRootFolderName: folder.name, driveEnabled: true, status: "CONNECTED", lastCheckedAt: new Date(), lastError: null } }),
+      prisma.child.updateMany({ where: { branchId: branch.id }, data: { driveFolderId: null, driveFolderName: null } }),
+    ]);
     await writeAudit({ actorId: user.id, branchId: branch.id, action: "DRIVE_FOLDER_CHANGED", entityType: "GoogleConnection", entityId: branch.googleConnection?.id, summary: `Cartella Drive impostata su ${folder.name}`, metadata: { folderId } });
   } catch (error) {
     await prisma.googleConnection.update({ where: { branchId: branch.id }, data: { status: "ERROR", lastError: error instanceof Error ? error.message : "Cartella non accessibile" } }).catch(() => undefined);
     redirect("/admin/impostazioni?google=cartella-non-accessibile");
   }
   redirect("/admin/impostazioni?google=cartella-salvata");
+}
+
+export async function migrateDriveDocumentsAction(formData: FormData) {
+  const { user, branch } = await requireAdminBranch();
+  if (!branch.googleConnection?.driveRootFolderId) redirect("/admin/impostazioni?google=cartella-non-valida");
+  const itemIds = formData.getAll("requestItemId").map(String).filter(Boolean);
+  if (!itemIds.length) redirect("/admin/impostazioni?migrazione=seleziona");
+  const deleteOld = formData.get("deleteOld") === "on";
+  const submissions = await prisma.submission.findMany({
+    where: {
+      requestItemId: { in: itemIds },
+      currentDriveFileId: { not: null },
+      assignment: { child: { branchId: branch.id } },
+    },
+    include: { assignment: { include: { child: true } }, requestItem: true },
+  });
+  let copied = 0;
+  let failed = 0;
+  for (const submission of submissions) {
+    if (!submission.currentDriveFileId || !submission.currentDriveFileName) continue;
+    const oldFileId = submission.currentDriveFileId;
+    try {
+      const migrated = await copyDriveFileToChild(submission.assignment.childId, oldFileId, submission.currentDriveFileName);
+      await prisma.submission.update({
+        where: { id: submission.id },
+        data: {
+          currentDriveFileId: migrated.id,
+          currentDriveFileName: migrated.name,
+          currentMimeType: migrated.mimeType,
+          currentSizeBytes: migrated.size || submission.currentSizeBytes,
+        },
+      });
+      if (deleteOld) await deleteDriveFile(branch.id, oldFileId).catch(() => undefined);
+      copied += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  await writeAudit({
+    actorId: user.id,
+    branchId: branch.id,
+    action: "DRIVE_DOCUMENTS_MIGRATED",
+    entityType: "GoogleConnection",
+    entityId: branch.googleConnection.id,
+    summary: `${copied} documenti trasferiti nella cartella Drive attuale`,
+    metadata: { itemIds, copied, failed, deleteOld },
+  });
+  revalidatePath("/admin/impostazioni");
+  redirect(`/admin/impostazioni?migrazione=${failed ? "parziale" : "completata"}&copiati=${copied}&falliti=${failed}`);
 }
 
 export async function disconnectGoogleAction(branchId: string) {

@@ -100,6 +100,20 @@ export async function uploadFileToChild(childId: string, file: File, driveFileNa
   return { id: response.data.id, name: response.data.name || driveFileName, mimeType: response.data.mimeType || file.type, size: Number(response.data.size || file.size) };
 }
 
+export async function copyDriveFileToChild(childId: string, sourceFileId: string, driveFileName: string) {
+  const { branchId, folderId } = await ensureChildDriveFolder(childId);
+  const { client } = await getAuthorizedGoogleClient(branchId);
+  const drive = google.drive({ version: "v3", auth: client });
+  const response = await drive.files.copy({
+    fileId: sourceFileId,
+    requestBody: { name: driveFileName, parents: [folderId] },
+    fields: "id,name,mimeType,size",
+    supportsAllDrives: true,
+  });
+  if (!response.data.id) throw new Error("Copia su Google Drive non riuscita");
+  return { id: response.data.id, name: response.data.name || driveFileName, mimeType: response.data.mimeType || "application/octet-stream", size: Number(response.data.size || 0) };
+}
+
 export async function uploadFileToBranchFolder(branchId: string, folderName: string, file: File, driveFileName: string) {
   const branch = await prisma.branch.findUnique({ where: { id: branchId }, include: { googleConnection: true } });
   if (!branch) throw new Error("Branca non trovata");
