@@ -6,7 +6,8 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import { prisma } from "@/lib/db";
 import { safeDriveName } from "@/lib/utils";
 
-export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
+export const LEGACY_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 export const EMAIL_SCOPE = "https://www.googleapis.com/auth/userinfo.email";
 

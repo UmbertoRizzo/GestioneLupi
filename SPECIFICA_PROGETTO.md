@@ -101,18 +101,17 @@ individuali, cosi i destinatari storici non cambiano per errore.
 ## 7. Google Drive per branca
 
 Ogni branca autorizza il proprio account Google con OAuth 2.0 e accesso offline.
-Il flusso preferito usa lo scope `drive.file` e Google Picker: l'admin seleziona
-una cartella esplicitamente oppure lascia che GestioneLupi ne crei una. Questa
-scelta evita l'accesso generale a tutto il Drive.
+Il flusso preferito usa lo scope `drive` e Google Picker: l'admin seleziona
+la cartella che contiene direttamente le cartelle dei ragazzi. GestioneLupi
+riconosce le sottocartelle gia esistenti e crea solo quelle mancanti.
 
 Struttura consigliata:
 
 ```text
 Cartella branca/
-  Ragazzi/
-    Mario Rossi - CODICEPERSONA/
-      Documento di Identita.pdf
-      Bonifico Prima Rata.pdf
+  Mario Rossi/
+    Documento di Identita.pdf
+    Bonifico Prima Rata.pdf
   Modelli/
   Attivita/
 ```
@@ -255,4 +254,3 @@ disco di Render.
 - Un file rimosso da Drive risulta non disponibile nel sito.
 - Le operazioni critiche sono autorizzate lato server e presenti nel log.
 - L'interfaccia e usabile a 360 px e su desktop senza sovrapposizioni.
-

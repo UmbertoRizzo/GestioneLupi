@@ -51,7 +51,7 @@ Nel progetto Google Cloud:
    l'app in modalita test e aggiungere come utenti di prova gli account delle
    branche.
 3. Aggiungere gli scope:
-   - `https://www.googleapis.com/auth/drive.file`;
+   - `https://www.googleapis.com/auth/drive`;
    - `https://www.googleapis.com/auth/userinfo.email`;
    - `https://www.googleapis.com/auth/gmail.send`, solo per l'invio dalla mail
      della branca.
@@ -76,9 +76,10 @@ Inserire poi in Render:
 Le variabili `NEXT_PUBLIC_*` servono durante la build: dopo averle aggiunte,
 eseguire un nuovo deploy completo su Render.
 
-Lo scope `drive.file` limita l'app ai file creati dal portale o scelti
-esplicitamente con Google Picker. Per una cartella Drive gia esistente usare
-quindi il pulsante **Scegli da Drive**, invece di affidarsi al solo ID incollato.
+Lo scope `drive` permette al portale di riconoscere anche le sottocartelle gia
+esistenti nella cartella della branca, evitando doppioni come due cartelle con lo
+stesso nome del ragazzo. Per una cartella Drive gia esistente usare il pulsante
+**Scegli da Drive** oppure incollare il link della cartella.
 
 ## 4. Collegare una branca
 
@@ -95,8 +96,8 @@ stabilito nella richiesta, mantenendo l'estensione originale.
 ## 5. Email
 
 La modalita consigliata su Render e Gmail API: usa HTTPS e permette di inviare
-dall'account della branca. Lo scope `gmail.send` puo richiedere la verifica OAuth
-prima di rendere l'app disponibile a utenti esterni alla lista di test.
+dall'account della branca. Gli scope `drive` e `gmail.send` possono richiedere la
+verifica OAuth prima di rendere l'app disponibile a utenti esterni alla lista di test.
 
 L'alternativa SMTP usa `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` e
 `SMTP_FROM`. I servizi gratuiti Render bloccano le comuni porte SMTP, quindi su

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { hashToken, encrypt } from "@/lib/crypto";
 import { prisma } from "@/lib/db";
-import { createOAuthClient, DRIVE_SCOPE, GMAIL_SCOPE, verifyDriveFolder } from "@/lib/google";
+import { createOAuthClient, DRIVE_SCOPE, GMAIL_SCOPE, LEGACY_DRIVE_SCOPE, verifyDriveFolder } from "@/lib/google";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -27,12 +27,12 @@ export async function GET(request: NextRequest) {
       update: {
         status: "CONNECTED", googleEmail: profile.data.email, encryptedAccessToken: tokens.access_token ? encrypt(tokens.access_token) : previous?.encryptedAccessToken,
         encryptedRefreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token) : previous?.encryptedRefreshToken, tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-        scopes, driveEnabled: scopes.includes(DRIVE_SCOPE), gmailEnabled: scopes.includes(GMAIL_SCOPE), lastCheckedAt: new Date(), lastError: null,
+        scopes, driveEnabled: scopes.includes(DRIVE_SCOPE) || scopes.includes(LEGACY_DRIVE_SCOPE), gmailEnabled: scopes.includes(GMAIL_SCOPE), lastCheckedAt: new Date(), lastError: null,
       },
       create: {
         branchId: savedState.branchId, status: "CONNECTED", googleEmail: profile.data.email, encryptedAccessToken: tokens.access_token ? encrypt(tokens.access_token) : null,
         encryptedRefreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token) : null, tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-        scopes, driveEnabled: scopes.includes(DRIVE_SCOPE), gmailEnabled: scopes.includes(GMAIL_SCOPE), lastCheckedAt: new Date(),
+        scopes, driveEnabled: scopes.includes(DRIVE_SCOPE) || scopes.includes(LEGACY_DRIVE_SCOPE), gmailEnabled: scopes.includes(GMAIL_SCOPE), lastCheckedAt: new Date(),
       },
     });
     if (previous?.driveRootFolderId) {
