@@ -74,14 +74,11 @@ async function findOrCreateFolder(branchId: string, parentId: string, name: stri
 }
 
 export async function ensureChildDriveFolder(childId: string) {
-  const child = await prisma.child.findUnique({ where: { id: childId }, include: { branch: { include: { group: true, googleConnection: true } } } });
+  const child = await prisma.child.findUnique({ where: { id: childId }, include: { branch: { include: { googleConnection: true } } } });
   if (!child) throw new Error("Ragazzo non trovato");
   if (child.driveFolderId) return { branchId: child.branchId, folderId: child.driveFolderId };
-  let rootId = child.branch.googleConnection?.driveRootFolderId;
-  if (!rootId) {
-    const created = await createBranchRootFolder(child.branchId, `GestioneLupi - ${child.branch.group.name} - ${child.branch.name}`);
-    rootId = created.id;
-  }
+  const rootId = child.branch.googleConnection?.driveRootFolderId;
+  if (!rootId) throw new Error("Scegli prima la cartella principale Google Drive nelle impostazioni della branca");
   const childrenRootId = await findOrCreateFolder(child.branchId, rootId, "Ragazzi");
   const folderName = safeDriveName(`${child.firstName} ${child.lastName} - ${child.personCode}`);
   const folderId = await findOrCreateFolder(child.branchId, childrenRootId, folderName);
@@ -105,13 +102,10 @@ export async function uploadFileToChild(childId: string, file: File, driveFileNa
 }
 
 export async function uploadFileToBranchFolder(branchId: string, folderName: string, file: File, driveFileName: string) {
-  const branch = await prisma.branch.findUnique({ where: { id: branchId }, include: { group: true, googleConnection: true } });
+  const branch = await prisma.branch.findUnique({ where: { id: branchId }, include: { googleConnection: true } });
   if (!branch) throw new Error("Branca non trovata");
-  let rootId = branch.googleConnection?.driveRootFolderId;
-  if (!rootId) {
-    const created = await createBranchRootFolder(branch.id, `GestioneLupi - ${branch.group.name} - ${branch.name}`);
-    rootId = created.id;
-  }
+  const rootId = branch.googleConnection?.driveRootFolderId;
+  if (!rootId) throw new Error("Scegli prima la cartella principale Google Drive nelle impostazioni della branca");
   const targetFolderId = await findOrCreateFolder(branchId, rootId, folderName);
   const { client } = await getAuthorizedGoogleClient(branchId);
   const drive = google.drive({ version: "v3", auth: client });

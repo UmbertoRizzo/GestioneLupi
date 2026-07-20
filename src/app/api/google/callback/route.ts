@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { hashToken, encrypt } from "@/lib/crypto";
 import { prisma } from "@/lib/db";
-import { createBranchRootFolder, createOAuthClient, DRIVE_SCOPE, GMAIL_SCOPE, verifyDriveFolder } from "@/lib/google";
+import { createOAuthClient, DRIVE_SCOPE, GMAIL_SCOPE, verifyDriveFolder } from "@/lib/google";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -35,16 +35,16 @@ export async function GET(request: NextRequest) {
         scopes, driveEnabled: scopes.includes(DRIVE_SCOPE), gmailEnabled: scopes.includes(GMAIL_SCOPE), lastCheckedAt: new Date(),
       },
     });
-    const branch = await prisma.branch.findUnique({ where: { id: savedState.branchId }, include: { group: true } });
     if (previous?.driveRootFolderId) {
       try {
         const folder = await verifyDriveFolder(savedState.branchId, previous.driveRootFolderId);
         await prisma.googleConnection.update({ where: { branchId: savedState.branchId }, data: { driveRootFolderName: folder.name } });
       } catch {
-        if (branch) await createBranchRootFolder(branch.id, `GestioneLupi - ${branch.group.name} - ${branch.name}`);
+        await prisma.googleConnection.update({
+          where: { branchId: savedState.branchId },
+          data: { driveRootFolderId: null, driveRootFolderName: null },
+        });
       }
-    } else if (branch) {
-      await createBranchRootFolder(branch.id, `GestioneLupi - ${branch.group.name} - ${branch.name}`);
     }
     await prisma.auditLog.create({ data: { actorId: user.id, branchId: savedState.branchId, action: "GOOGLE_CONNECTED", entityType: "GoogleConnection", summary: `Account Google ${profile.data.email || ""} collegato` } });
     settingsUrl.searchParams.set("google", "collegato");
