@@ -9,7 +9,8 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const state = request.nextUrl.searchParams.get("state");
   const error = request.nextUrl.searchParams.get("error");
-  const settingsUrl = new URL("/admin/impostazioni", request.url);
+  const appUrl = process.env.APP_URL || request.nextUrl.origin;
+  const settingsUrl = new URL("/admin/impostazioni", appUrl);
   if (error || !code || !state) { settingsUrl.searchParams.set("google", error || "annullato"); return NextResponse.redirect(settingsUrl); }
   const [user, savedState] = await Promise.all([getCurrentUser(), prisma.oAuthState.findUnique({ where: { nonceHash: hashToken(state) } })]);
   if (!user || !savedState || savedState.userId !== user.id || savedState.expiresAt < new Date()) { settingsUrl.searchParams.set("google", "stato-non-valido"); return NextResponse.redirect(settingsUrl); }
