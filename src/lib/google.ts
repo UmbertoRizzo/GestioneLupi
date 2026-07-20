@@ -80,7 +80,7 @@ export async function ensureChildDriveFolder(childId: string) {
   const rootId = child.branch.googleConnection?.driveRootFolderId;
   if (!rootId) throw new Error("Scegli prima la cartella principale Google Drive nelle impostazioni della branca");
   const childrenRootId = await findOrCreateFolder(child.branchId, rootId, "Ragazzi");
-  const folderName = safeDriveName(`${child.firstName} ${child.lastName} - ${child.personCode}`);
+  const folderName = safeDriveName(`${child.firstName} ${child.lastName}`);
   const folderId = await findOrCreateFolder(child.branchId, childrenRootId, folderName);
   await prisma.child.update({ where: { id: child.id }, data: { driveFolderId: folderId, driveFolderName: folderName } });
   return { branchId: child.branchId, folderId };
