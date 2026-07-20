@@ -9,6 +9,22 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="it">
       <body>
         {children}
+        <Script id="jeff-widget-config" strategy="beforeInteractive">
+          {`
+            window.JeffWidgetConfig = {
+              siteId: "gestione-lupi",
+              assistantName: "Jeff",
+              buttonText: "Assistente virtuale",
+              welcomeMessage: "Ciao, io sono solo un assistente dimostrativo, su questo sito non posso fare molto. Se pensi che io possa essere utile per il tuo sito, scrivi all'amministratore di GestioneLupi alla mail udrizzo04@gmail.com!",
+              inputPlaceholder: "Scrivi una domanda...",
+              primaryColor: "#323d49",
+              secondaryColor: "#f5f5f5",
+              textColor: "#ffffff",
+              backendUrl: "https://jeff-b2gq.onrender.com/chat"
+            };
+          `}
+        </Script>
+
         <Script id="jeff-widget-loader" strategy="afterInteractive">
           {`
             const script = document.createElement("script");
