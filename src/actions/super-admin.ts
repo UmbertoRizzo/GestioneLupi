@@ -57,7 +57,15 @@ export async function suspendUserAction(userId: string) {
 
 export async function reactivateUserAction(userId: string) {
   const actor = await requireRole("SUPER_ADMIN");
-  const user = await prisma.user.update({ where: { id: userId }, data: { status: AccountStatus.ACTIVE } });
+  const existing = await prisma.user.findUnique({ where: { id: userId }, include: { branchAdmins: true } });
+  if (!existing) return;
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { status: AccountStatus.ACTIVE } }),
+    prisma.branch.updateMany({ where: { id: { in: existing.branchAdmins.map((item) => item.branchId) }, status: BranchStatus.SUSPENDED }, data: { status: BranchStatus.ACTIVE } }),
+  ]);
+  const user = { email: existing.email };
   await writeAudit({ actorId: actor.id, action: "USER_REACTIVATED", entityType: "User", entityId: userId, summary: `Account ${user.email} riattivato` });
+  revalidatePath("/super");
+  revalidatePath("/super/branche");
   revalidatePath("/super/utenti");
 }
